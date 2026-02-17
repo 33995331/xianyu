@@ -1,0 +1,64 @@
+name: XianYu High Frequency (10k/Day)
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # 每5分钟启动一次 (极高频)
+  workflow_dispatch:
+
+# 必须开启：防止任务堆积导致封号
+concurrency: 
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  simulate-traffic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # 必须限制超时，防止卡死
+    steps:
+      - name: High Volume Traffic
+        run: |
+          # --- 1. 针对移动端的伪装指纹 (闲鱼主要是手机端) ---
+          user_agents=(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+            "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
+            "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
+            "Mozilla/5.0 (Linux; Android 14; Xiaomi 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
+          )
+          
+          # --- 2. 伪装来源 (模拟从淘宝、微信、微博点进来) ---
+          referers=(
+            "https://m.tb.cn/"
+            "https://main.m.taobao.com/"
+            "https://weixin.qq.com/"
+            "https://weibo.com/"
+            ""
+          )
+
+          # --- 3. 核心逻辑：每次运行 35 次 ---
+          # 35次 x 288轮 (每5分钟) ≈ 10,080 次/天
+          loop_count=35
+          
+          echo "本轮计划访问次数: $loop_count 次"
+
+          for ((i=1; i<=loop_count; i++)); do
+            ua=${user_agents[$RANDOM % ${#user_agents[@]}]}
+            ref=${referers[$RANDOM % ${#referers[@]}]}
+            
+            # --- 发送请求 ---
+            # 目标地址：你的闲鱼短链接
+            # -L: 必须跟随重定向 (因为 m.tb.cn 是短链，会跳转)
+            # -m 10: 缩短超时时间，提高效率
+            curl -s -o /dev/null -w "[$i/$loop_count] 状态: %{http_code}\n" \
+              -A "$ua" \
+              -e "$ref" \
+              -H "Accept-Language: zh-CN,zh;q=0.9" \
+              -L -m 10 "https://m.tb.cn/h.7CXIKzn?tk=YDcqUM33Z4q" || true
+
+            # --- 4. 极速间隔 (1s - 3s) ---
+            # 为了在5分钟内跑完35次，间隔不能太长
+            if [ "$i" -lt "$loop_count" ]; then
+              sleep_time=$((1 + RANDOM % 3)) 
+              sleep $sleep_time
+            fi
+          done
