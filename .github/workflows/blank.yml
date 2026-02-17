@@ -1,60 +1,24 @@
-name: XianYu PC Refresh (10k/Day)
+name: XianYu Puppeteer Visit
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # 每5分钟启动
+    - cron: '*/10 * * * *' # 每10分钟一次，不要太频
   workflow_dispatch:
 
-concurrency: 
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
-
 jobs:
-  simulate-traffic:
+  browser-visit:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - name: PC Browser Traffic
-        run: |
-          # --- 1. 彻底改为 PC 端指纹 (Windows/Mac) ---
-          # 既然你手动刷新有效，我们就模拟你的电脑
-          user_agents=(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15"
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0"
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0"
-          )
-          
-          # --- 2. 来源伪装成淘宝电脑版或直接访问 ---
-          referers=(
-            "https://www.taobao.com/"
-            "https://s.taobao.com/search?q=iphone13"
-            "" # 空来源，模拟直接在浏览器地址栏回车
-          )
+      - name: Checkout
+        uses: actions/checkout@v4
 
-          # --- 3. 核心逻辑：35次 x 288轮 ≈ 10,000次 ---
-          loop_count=35
-          
-          echo "模拟 PC 端刷新: $loop_count 次"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
-          for ((i=1; i<=loop_count; i++)); do
-            ua=${user_agents[$RANDOM % ${#user_agents[@]}]}
-            ref=${referers[$RANDOM % ${#referers[@]}]}
-            
-            # --- 发送请求 ---
-            # 这里的 User-Agent 变成了电脑，看看能不能骗过计数器
-            curl -s -o /dev/null -w "[$i/$loop_count] PC刷新: %{http_code}\n" \
-              -A "$ua" \
-              -e "$ref" \
-              -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8" \
-              -H "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8" \
-              -H "Cache-Control: max-age=0" \
-              -H "Connection: keep-alive" \
-              -L -m 10 "https://m.tb.cn/h.7CXIKzn?tk=YDcqUM33Z4q" || true
+      - name: Install Dependencies
+        run: npm install puppeteer
 
-            # --- 极速间隔 ---
-            if [ "$i" -lt "$loop_count" ]; then
-              sleep_time=$((1 + RANDOM % 3)) 
-              sleep $sleep_time
-            fi
-          done
+      - name: Run Puppeteer Script
+        run: node visit.js
